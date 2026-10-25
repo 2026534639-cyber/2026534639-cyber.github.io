@@ -1,6 +1,6 @@
 ---
 title: 重新开始写博客
-author: XingHui
+author: 理不尽
 pubDatetime: 2026-10-25T18:00:00+08:00
 featured: true
 draft: false

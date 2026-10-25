@@ -3,9 +3,9 @@ import { defineAstroPaperConfig } from "./src/types/config";
 export default defineAstroPaperConfig({
   site: {
     url: "https://2026534639-cyber.github.io/",
-    title: "XingHui 的博客",
+    title: "Blog",
     description: "深大学生的折腾记录：工具、代码与踩过的坑",
-    author: "XingHui",
+    author: "理不尽",
     profile: "https://github.com/2026534639-cyber",
     ogImage: "default-og.jpg",
     lang: "zh-CN",

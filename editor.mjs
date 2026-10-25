@@ -1,4 +1,4 @@
-// XingHui 随笔编辑器 — 零依赖本地服务（node editor.mjs → http://localhost:4999）
+// 理不尽的随笔编辑器 — 零依赖本地服务（node editor.mjs → http://localhost:4999）
 // 读写 D:\blog\src\content\posts\，发布按钮执行 git add/commit/push 触发 Pages 自动部署
 import http from 'node:http';
 import fs from 'node:fs/promises';
@@ -44,7 +44,7 @@ function buildFile(p) {
 		.join('\n');
 	return `---
 title: "${p.title}"
-author: "XingHui"
+author: "理不尽"
 pubDatetime: "${p.pubDatetime}"
 featured: ${!!p.featured}
 draft: ${!!p.draft}
@@ -215,7 +215,7 @@ const html = `<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>随笔编辑器 · XingHui 的博客</title>
+<title>随笔编辑器 · Blog</title>
 <style>
 :root{--bg:#faf9f7;--ink:#1c1c1c;--mut:#8a8a86;--line:#e6e4e0;--card:#fff;--acc:#1c1c1c}
 @media(prefers-color-scheme:dark){:root{--bg:#161616;--ink:#e8e6e3;--mut:#8f8d89;--line:#2c2b29;--card:#1f1f1e;--acc:#e8e6e3}}
@@ -256,7 +256,7 @@ a{color:var(--ink)}
 <body>
 <div class="wrap">
   <div class="side">
-    <div class="brand">随笔编辑器<small>XINGHUI'S BLOG</small></div>
+    <div class="brand">随笔编辑器<small>BLOG</small></div>
     <button id="newBtn">＋ 新随笔</button>
     <div class="fld">已发布 / 草稿</div>
     <div id="list"></div>

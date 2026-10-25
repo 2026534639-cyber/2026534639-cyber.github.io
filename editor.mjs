@@ -9,7 +9,9 @@ import { promisify } from 'node:util';
 const run = promisify(execFile);
 const ROOT = path.resolve(import.meta.dirname);
 const POSTS = path.join(ROOT, 'src', 'content', 'posts');
+const ASSETS = path.join(ROOT, 'public', 'assets');
 const PORT = 4999;
+await fs.mkdir(ASSETS, { recursive: true });
 
 /* ---------- frontmatter 工具 ---------- */
 
@@ -119,7 +121,7 @@ const server = http.createServer(async (req, res) => {
 			let d = '';
 			req.on('data', c => {
 				d += c;
-				if (d.length > 5e6) reject(new Error('too large'));
+				if (d.length > 15e6) reject(new Error('too large'));
 			});
 			req.on('end', () => resolve(d ? JSON.parse(d) : {}));
 		});
@@ -170,6 +172,31 @@ const server = http.createServer(async (req, res) => {
 			const { name } = await readBody();
 			await fs.rm(path.join(POSTS, safeName(name)));
 			json(200, { ok: true });
+		} else if (req.method === 'GET' && url.pathname.startsWith('/assets/')) {
+			// 编辑器预览用的静态图片服务（与线上 /assets/ 路径一致）
+			const fname = path.basename(url.pathname);
+			const types = {
+				'.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+				'.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml',
+				'.avif': 'image/avif',
+			};
+			const ext = path.extname(fname).toLowerCase();
+			if (!types[ext]) return json(404, { error: 'unsupported type' });
+			const data = await fs.readFile(path.join(ASSETS, fname));
+			res.writeHead(200, { 'Content-Type': types[ext], 'Cache-Control': 'public, max-age=86400' });
+			res.end(data);
+		} else if (url.pathname === '/api/upload' && req.method === 'POST') {
+			const { name, data } = await readBody();
+			const buf = Buffer.from(String(data || ''), 'base64');
+			if (!buf.length || buf.length > 10e6) return json(400, { error: '图片为空或超过 10MB' });
+			const ext = path.extname(String(name || '')).toLowerCase();
+			if (!['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.avif'].includes(ext))
+				return json(400, { error: '不支持的图片格式（png/jpg/gif/webp/svg/avif）' });
+			const d = new Date();
+			const pad = n => String(n).padStart(2, '0');
+			const fname = `img-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}-${Math.random().toString(36).slice(2, 6)}${ext}`;
+			await fs.writeFile(path.join(ASSETS, fname), buf);
+			json(200, { ok: true, url: `/assets/${fname}` });
 		} else if (url.pathname === '/api/publish' && req.method === 'POST') {
 			const { message } = await readBody();
 			json(200, await gitPublish(message));
@@ -254,6 +281,8 @@ a{color:var(--ink)}
       <button class="pri" id="pubBtn">保存并发布</button>
       <button id="saveBtn">仅保存</button>
       <button id="prevBtn">预览</button>
+      <button id="imgBtn">🖼 图片</button>
+      <input type="file" id="imgFile" accept="image/*" multiple hidden>
       <button class="danger" id="delBtn">删除</button>
       <span id="saved" style="font-size:12px;color:var(--mut)"></span>
     </div>
@@ -310,7 +339,16 @@ $('saveBtn').onclick=()=>save(false);
 $('pubBtn').onclick=()=>save(true);
 $('prevBtn').onclick=()=>{$('preview').style.display==='none'&&$('content').style.display!=='none'?showPreview():hidePreview()};
 $('delBtn').onclick=async()=>{if(!curName){status('当前没有打开的文章');return}if(!confirm('确定删除 '+curName+' ？（本地删除后需点「保存并发布」才会从线上移除）'))return;await api('/api/delete',{name:curName});newPost();status('已删除本地文件，点「保存并发布」同步线上。');loadList()};
-['title','tags','desc','content'].forEach(i=>$(i).addEventListener('input',()=>{clearTimeout(timer);timer=setTimeout(()=>localStorage.setItem('essay-draft',JSON.stringify({...collect(),isNew,curName})),800)}));
+function backup(){clearTimeout(timer);timer=setTimeout(()=>localStorage.setItem('essay-draft',JSON.stringify({...collect(),isNew,curName})),800)}
+['title','tags','desc','content'].forEach(i=>$(i).addEventListener('input',backup));
+async function uploadFile(f){status('上传图片中：'+f.name);try{
+const b64=await new Promise((res,rej)=>{const fr=new FileReader();fr.onload=()=>res(fr.result.split(',')[1]);fr.onerror=rej;fr.readAsDataURL(f)});
+const r=await api('/api/upload',{name:f.name,data:b64});
+insertAtCursor('\\n![图片]('+r.url+')\\n');status('图片已插入 '+r.url+'，随文章一起发布上线');}catch(e){status('图片上传失败：'+e.message)}}
+function insertAtCursor(text){const t=$('content');const s=t.selectionStart??t.value.length;const e=t.selectionEnd??s;t.value=t.value.slice(0,s)+text+t.value.slice(e);t.selectionStart=t.selectionEnd=s+text.length;t.focus();backup()}
+$('imgBtn').onclick=()=>$('imgFile').click();
+$('imgFile').onchange=e=>{[...e.target.files].forEach(uploadFile);e.target.value=''};
+document.addEventListener('paste',e=>{const fs=[...(e.clipboardData?.files||[])].filter(f=>f.type.startsWith('image/'));if(fs.length){e.preventDefault();fs.forEach(uploadFile)}});
 (function restore(){const s=localStorage.getItem('essay-draft');if(!s)return;try{const p=JSON.parse(s);if(!p.title&&!p.content)return;['title','name','tags','desc','content'].forEach(i=>$(i).value=p[i]||'');$('draft').checked=p.draft!==false;$('featured').checked=!!p.featured;curName=p.curName||null;isNew=!!p.isNew;$('name').readOnly=!isNew;status('已恢复上次未保存的草稿（浏览器暂存）')}catch(e){}})();
 loadList();
 </script>

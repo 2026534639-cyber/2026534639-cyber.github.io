@@ -18,11 +18,17 @@ function stripInvalidXmlChars(str: string): string {
 
 export async function GET(context: APIContext) {
 	const blog = await getSortedPosts();
+	const site = context.site ?? new URL("https://fuwari.vercel.app");
+	const selfUrl = new URL(url("/rss.xml"), site).toString();
+	const latest = blog[0]?.data.published ?? null;
 
 	return rss({
 		title: siteConfig.title,
 		description: siteConfig.subtitle || "No description",
-		site: context.site ?? "https://fuwari.vercel.app",
+		site,
+		xmlns: {
+			atom: "http://www.w3.org/2005/Atom",
+		},
 		items: blog.map((post) => {
 			const content =
 				typeof post.body === "string" ? post.body : String(post.body || "");
@@ -37,6 +43,13 @@ export async function GET(context: APIContext) {
 				}),
 			};
 		}),
-		customData: `<language>${siteConfig.lang}</language>`,
+		customData: [
+			// RFC 1766 / BCP 47 用连字符，zh_CN 这种下划线写法部分阅读器认不出
+			`<language>${siteConfig.lang.replace(/_/g, "-")}</language>`,
+			`<atom:link href="${selfUrl}" rel="self" type="application/rss+xml"/>`,
+			latest instanceof Date && !Number.isNaN(latest.getTime())
+				? `<lastBuildDate>${latest.toUTCString()}</lastBuildDate>`
+				: "",
+		].join(""),
 	});
 }

@@ -2,79 +2,52 @@
 
 理不尽的折腾记录 —— <https://2026534639-cyber.github.io/>
 
-基于 [Fuwari](https://github.com/saicaca/fuwari)（Astro + Svelte + Tailwind），部署在 GitHub Pages。
+基于 [Mizuki](https://github.com/LyraVoid/Mizuki)（Astro 7 + Svelte + Tailwind），部署在 GitHub Pages。满屏二次元壁纸、波浪过渡、站点统计都是主题自带的。
+
+## 站点信息在哪改
+
+配置全部在 `src/config/`，按文件拆分：
+
+| 文件 | 内容 |
+|---|---|
+| `siteConfig.ts` | 标题、副标题、语言、主题色、首页大字与打字机文案、横幅图、各功能页开关 |
+| `profileConfig.ts` | 名字、头像、简介、社交链接 |
+| `navBarConfig.ts` | 导航栏（预设 + 自定义，支持多级菜单） |
+| `backgroundWallpaper.ts` | 全屏壁纸（桌面/手机分开，可轮播） |
+| `musicConfig.ts` | 音乐播放器（默认关着，要开就 enable: true 并配自己的歌单） |
+| `commentConfig.ts` | 评论（giscus/twikoo，默认关） |
+
+壁纸图片放 `public/assets/desktop-banner/` 和 `public/assets/mobile-banner/`，头像在 `src/assets/images/avatar.png`。
 
 ## 写文章
 
-双击桌面「博客后台」，浏览器会打开 <http://localhost:4999>。**看到的就是真实的博客页面**，改动直接落在页面上：
-
-- 点标题、点正文就能改，选中文字会浮出工具条（加粗/斜体/标题/列表/引用/链接/图片）
-- `Ctrl+V` 直接粘截图，图片自动上传到 `public/assets/`
-- 左下角工具条：切换文章、＋新建、保存、发布、设置
-- 「保存」= 写回 markdown 文件；「发布」= `git commit` + `git push`，一两分钟后线上更新
-- `Ctrl+S` 保存；有未保存改动时关闭页面会拦一下
-
-## 改界面
-
-同一个后台点「设置」：
-
-| 分组 | 能改 |
-|---|---|
-| 外观 | 站点标题、副标题、个人简介、主题色（实时预览）、横幅图、头像 |
-| 排版 | 每页篇数、横幅高度、首页延伸、页宽、目录层级 |
-| 导航栏 | 增删条目、排序、内置项（主页/归档/关于）保留、外链标记 |
-| 独立页面 | 新建 `/短名/` 页面（自动生成路由）、删除页面 |
-
-设置会写进 `src/config.ts` 和 `src/constants/constants.ts`，只改值不动结构，改坏了 `git checkout` 就能回滚。
-
-也可以手动创建文章，放在 `src/content/posts/`，格式：
+文章在 `src/content/posts/`，Mizuki 的 frontmatter：
 
 ```markdown
 ---
 title: 标题
-published: 2026-10-30T20:00:00+08:00
+published: 2026-10-31
+pinned: true          # 可选，置顶
 description: 一句话摘要
-tags: ["随笔", "工具"]
+tags: [随笔]
 category: 随笔
+author: 理不尽
+licenseName: "Unlicensed"
 draft: false
 ---
 ```
 
-`category` 决定归档页分组，`draft: true` 只在本机预览、不会构建上线。
+`draft: true` 只在本机预览，不会构建上线。关于页在 `src/content/spec/about.md`。
 
-## 改站点信息
-
-全部集中在 `src/config.ts`：站点标题/副标题/语言、主题色相、横幅图、头像、导航栏、社交链接。
-
-- 横幅：`src/assets/images/banner.png`
-- 头像：`src/assets/images/avatar.png`
-- 站点地址：`astro.config.mjs` 里的 `site`
+> 可视化后台（原随笔编辑器）是按 Fuwari 的页面结构写的，正在适配 Mizuki；适配好之前，改文章直接编辑 md 文件然后推送。
 
 ## 本地调试 / 手动构建
 
 ```bash
-npx pnpm@9.14.4 dev      # 本地预览 http://localhost:4321
-npx pnpm@9.14.4 build    # 构建到 dist/（含 Pagefind 搜索索引）
+npx pnpm@11.5.3 dev      # 本地预览 http://localhost:4321
+npx pnpm@11.5.3 exec astro build && npx pnpm@11.5.3 exec pagefind --site dist
 ```
+
+注意：不要用 `pnpm build`，它会先跑番剧数据抓取脚本（需要外网）。字体已经放在 `src/assets/fonts/`，构建不需要联网。
 
 推送 `main` 分支后，GitHub Actions 自动构建并发布。
-
-## 目录
-
-```
-src/
-  config.ts              站点配置
-  content/posts/         文章
-  content/pages/         后台新建的独立页面（正文）
-  content/spec/about.md  关于页
-  components/            Astro / Svelte 组件
-  plugins/               remark / rehype 插件（:::tip、GitHub 卡片等）
-  i18n/                  多语言文案
-admin/
-  server.mjs             反代 astro dev + 后台接口（端口 4999）
-  settings.mjs           读写 config.ts / constants.ts 的字段
-  pages.mjs              新建/删除独立页面
-  inject.js              注入页面的编辑界面 + HTML→Markdown
-editor.mjs               入口（双击「启动编辑器.bat」跑的就是它）
-.github/workflows/       Pages 部署
-```

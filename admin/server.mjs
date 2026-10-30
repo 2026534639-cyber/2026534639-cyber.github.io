@@ -5,6 +5,7 @@ import http from "node:http";
 import net from "node:net";
 import path from "node:path";
 import { execFile, spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { promisify } from "node:util";
 import { createSettings } from "./settings.mjs";
 import { createPages } from "./pages.mjs";
@@ -400,11 +401,18 @@ ${String(p.markdown || "").replace(/\r\n/g, "\n").trimEnd()}
 				if (![".png", ".jpg", ".jpeg", ".webp"].includes(ext)) throw new Error("只支持 png/jpg/webp");
 				const buf = Buffer.from(String(data || ""), "base64");
 				if (!buf.length || buf.length > 12e6) throw new Error("图片为空或超过 12MB");
-				const filename = `${kind}${ext}`;
 				const dir = path.join(root, "src", "assets", "images");
 				await fs.mkdir(dir, { recursive: true });
+				// 文件名带内容哈希：同尺寸换图也能换 URL，绕开 astro 图片缓存
+				const hash = createHash("md5").update(buf).digest("hex").slice(0, 8);
+				const filename = `${kind}-${hash}${ext}`;
+				const prev = await settings.read();
+				const oldFile = kind === "banner" ? prev.banner.file : prev.profile.avatar;
 				await fs.writeFile(path.join(dir, filename), buf);
 				await settings.setAsset(kind, filename);
+				if (oldFile && oldFile !== filename) {
+					await fs.rm(path.join(dir, oldFile), { force: true });
+				}
 				return json(200, { ok: true, file: filename });
 			}
 

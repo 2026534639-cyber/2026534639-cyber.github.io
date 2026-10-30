@@ -6,4 +6,4 @@
 - [UOOC-Assistant-Enhanced](https://github.com/2026534639-cyber/UOOC-Assistant-Enhanced) — 优课联盟课程辅助脚本
 - [zcode-bubble-theme](https://github.com/2026534639-cyber/zcode-bubble-theme) — ZCode 桌面端浅蓝气泡主题
 
-这个博客基于 [Fuwari](https://github.com/saicaca/fuwari) 主题搭建，部署在 GitHub Pages 上。这里会写项目复盘、开发笔记，以及各种折腾的记录。
+这个博客基于 [Mizuki](https://github.com/LyraVoid/Mizuki) 主题搭建，部署在 GitHub Pages 上。这里会写项目复盘、开发笔记，以及各种折腾的记录。

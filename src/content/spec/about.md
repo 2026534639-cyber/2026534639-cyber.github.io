@@ -7,3 +7,6 @@
 - [zcode-bubble-theme](https://github.com/2026534639-cyber/zcode-bubble-theme) — ZCode 桌面端浅蓝气泡主题
 
 这个博客基于 [Mizuki](https://github.com/LyraVoid/Mizuki) 主题搭建，部署在 GitHub Pages 上。这里会写项目复盘、开发笔记，以及各种折腾的记录。
+
+::github{repo="2026534639-cyber/szu-grab-tool"}
+

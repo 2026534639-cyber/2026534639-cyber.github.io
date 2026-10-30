@@ -1,7 +1,7 @@
 @echo off
-title Blog Editor
+title Blog Admin
 cd /d D:\blog
-echo Starting essay editor at http://localhost:4999 ...
-echo (Keep this window open while writing. Close it to stop the editor.)
-start "" cmd /c "timeout /t 2 /nobreak >nul && start http://localhost:4999"
+echo Starting blog admin at http://localhost:4999 ...
+echo (Keep this window open while editing. Close it to stop.)
+start "" cmd /c "timeout /t 4 /nobreak >nul && start http://localhost:4999"
 node editor.mjs

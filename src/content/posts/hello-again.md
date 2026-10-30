@@ -1,19 +1,17 @@
 ---
 title: 重新开始写博客
-author: 理不尽
-pubDatetime: 2026-10-25T18:00:00+08:00
-featured: true
-draft: false
-tags:
-  - 随笔
+published: 2026-10-25T18:00:00+08:00
 description: 八月搭了六天博客、发了一篇 test.md，这次换个顺序：先写字，再谈别的。
+tags: [随笔]
+category: 随笔
+draft: false
 ---
 
 这是一篇占位文章，用来验证「写完推送、网站自动更新」这条流水线。看到它就说明全通了，内容之后会改掉。
 
 记录一下这个博客的来历：2026 年 8 月，我曾用六天时间横跨 Cloudflare、Vercel、Netlify、GitHub 四个平台，亲手搭了一套 Next.js 全栈博客，功能齐全，自带说说和评论——最后产出一篇 `test.md`。基建豪华，内容为零。
 
-所以这次学乖了：直接用了现成的 [AstroPaper](https://github.com/satnaing/astro-paper) 主题，十几秒装完依赖，写完 markdown 推送一下就自动上线。省下来的时间，用来写字。
+后来换成 Astro 的静态主题，落地快，但页面太素，像一篇排好版的纯文本。现在用的是 [Fuwari](https://github.com/saicaca/fuwari)：横幅、卡片、目录、搜索都是现成的，折腾成本几乎为零。
 
 接下来想写的几篇：
 

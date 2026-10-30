@@ -1,30 +1,37 @@
-## Description
+## Type of change
 
-<!-- A clear and concise description of what the pull request does. Include any relevant motivation and background. -->
-
-## Types of changes
-
-<!-- What types of changes does your code introduce to AstroPaper? Put an `x` in the boxes that apply -->
-
-- [ ] Bug Fix (non-breaking change which fixes an issue)
-- [ ] New Feature (non-breaking change which adds functionality)
-- [ ] Documentation Update (if none of the other choices apply)
-- [ ] Others (any other types not listed above)
+- [ ] Bug fix (a non-breaking change that fixes an issue)
+- [ ] New feature (a non-breaking change that adds functionality)
+- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
+- [ ] Other (please describe):
 
 ## Checklist
 
-<!-- Please follow this checklist and put an x in each of the boxes, like this: [x]. You can also fill these out after creating the PR. This is simply a reminder of what we are going to look for before merging your code. -->
-
-- [ ] I have read the [Contributing Guide](https://github.com/satnaing/astro-paper/blob/main/.github/CONTRIBUTING.md)
-- [ ] I have added the necessary documentation (if appropriate)
-- [ ] Breaking Change (fix or feature that would cause existing functionality to not work as expected)
-
-## Further comments
-
-<!-- If this is a relatively large or complex change, kick off the discussion by explaining why you chose the solution you did and what alternatives you considered, etc... -->
+- [ ] I have read the [**CONTRIBUTING**](https://github.com/saicaca/fuwari/blob/main/CONTRIBUTING.md) document.
+- [ ] I have checked to ensure that this Pull Request is not for personal changes.
+- [ ] I have performed a self-review of my own code.
+- [ ] My changes generate no new warnings.
 
 ## Related Issue
 
-<!-- If this PR is related to an existing issue, link to it here. -->
+<!-- Please link to the issue that this pull request addresses. e.g. #123 -->
 
-Closes: #<!-- Issue number, if applicable -->
+
+## Changes
+
+<!-- Please describe the changes you made in this pull request. -->
+
+
+## How To Test
+
+<!-- Please describe how you tested your changes. -->
+
+
+## Screenshots (if applicable)
+
+<!-- If you made any UI changes, please include screenshots. -->
+
+
+## Additional Notes
+
+<!-- Any additional information that you want to share with the reviewer. -->

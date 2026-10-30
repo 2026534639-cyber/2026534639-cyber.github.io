@@ -26,7 +26,18 @@ function parseFrontmatter(text) {
 		const kv = t.match(/^([A-Za-z]+):\s*(.*)$/);
 		if (kv && !t.startsWith('-')) {
 			curKey = kv[1];
-			let v = kv[2].trim().replace(/^["']|["']$/g, '');
+			let v = kv[2].trim();
+			// Fuwari 用行内数组：tags: ["随笔", "工具"]
+			if (/^\[.*\]$/.test(v)) {
+				fm[curKey] = v
+					.slice(1, -1)
+					.split(',')
+					.map(s => s.trim().replace(/^["']|["']$/g, ''))
+					.filter(Boolean);
+				curKey = null;
+				continue;
+			}
+			v = v.replace(/^["']|["']$/g, '');
 			if (v === 'true') v = true;
 			else if (v === 'false') v = false;
 			fm[curKey] = v;
@@ -39,18 +50,16 @@ function parseFrontmatter(text) {
 }
 
 function buildFile(p) {
-	const tags = (p.tags && p.tags.length ? p.tags : ['随笔'])
-		.map(t => `  - ${t}`)
-		.join('\n');
+	const tags = p.tags && p.tags.length ? p.tags : ['随笔'];
+	const category = p.category || tags[0] || '随笔';
+	const q = s => `"${String(s).replace(/"/g, "'")}"`;
 	return `---
-title: "${p.title}"
-author: "理不尽"
-pubDatetime: "${p.pubDatetime}"
-featured: ${!!p.featured}
+title: ${q(p.title)}
+published: ${p.published}
+description: ${q(p.description || '')}
+tags: [${tags.map(q).join(', ')}]
+category: ${q(category)}
 draft: ${!!p.draft}
-tags:
-${tags}
-description: "${(p.description || '').replace(/"/g, "'")}"
 ---
 
 ${p.content.replace(/\r\n/g, '\n').trimEnd()}
@@ -82,10 +91,10 @@ async function listPosts() {
 			title: fm.title || name,
 			draft: !!fm.draft,
 			tags: fm.tags || [],
-			pubDatetime: fm.pubDatetime || '',
+			published: fm.published || '',
 		});
 	}
-	posts.sort((a, b) => String(b.pubDatetime).localeCompare(String(a.pubDatetime)));
+	posts.sort((a, b) => String(b.published).localeCompare(String(a.published)));
 	return posts;
 }
 
@@ -123,7 +132,13 @@ const server = http.createServer(async (req, res) => {
 				d += c;
 				if (d.length > 15e6) reject(new Error('too large'));
 			});
-			req.on('end', () => resolve(d ? JSON.parse(d) : {}));
+			req.on('end', () => {
+				try {
+					resolve(d ? JSON.parse(d) : {});
+				} catch (e) {
+					reject(new Error('请求体不是合法 JSON：' + e.message));
+				}
+			});
 		});
 	try {
 		const url = new URL(req.url, 'http://127.0.0.1');
@@ -141,9 +156,8 @@ const server = http.createServer(async (req, res) => {
 				title: fm.title || '',
 				tags: (fm.tags || []).join(', '),
 				description: fm.description || '',
-				featured: !!fm.featured,
 				draft: !!fm.draft,
-				pubDatetime: fm.pubDatetime || '',
+				published: fm.published || '',
 				content: body,
 			});
 		} else if (url.pathname === '/api/save' && req.method === 'POST') {
@@ -152,18 +166,19 @@ const server = http.createServer(async (req, res) => {
 			const d = new Date();
 			const pad = n => String(n).padStart(2, '0');
 			const pub =
-				p.pubDatetime ||
+				p.published ||
 				`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00+08:00`;
+			const tagList = String(p.tags || '')
+				.split(/[,，]/)
+				.map(t => t.trim())
+				.filter(Boolean);
 			const post = {
 				title: p.title || '无题',
-				tags: String(p.tags || '')
-					.split(/[,，]/)
-					.map(t => t.trim())
-					.filter(Boolean),
+				tags: tagList,
+				category: tagList[0] || '随笔',
 				description: p.description || '',
-				featured: !!p.featured,
 				draft: p.draft !== false,
-				pubDatetime: pub,
+				published: pub,
 				content: p.content || '',
 			};
 			await fs.writeFile(path.join(POSTS, name), buildFile(post), 'utf8');
@@ -268,11 +283,10 @@ a{color:var(--ink)}
     <div class="row"><input type="text" id="title" placeholder="标题"></div>
     <div class="row">
       <input type="text" id="name" placeholder="文件名（英文短横线，如 my-first-post）" style="flex:1">
-      <input type="text" id="tags" placeholder="标签，逗号分隔" style="flex:1">
+      <input type="text" id="tags" placeholder="标签，逗号分隔（第一个会当作分类）" style="flex:1">
     </div>
     <div class="row">
       <input type="text" id="desc" placeholder="一句话摘要" style="flex:2">
-      <label class="ck"><input type="checkbox" id="featured">精选</label>
       <label class="ck"><input type="checkbox" id="draft" checked>草稿（不上线）</label>
     </div>
     <textarea id="content" placeholder="正文，支持 Markdown……"></textarea>
@@ -316,13 +330,13 @@ para.push(x);}
 if(inList)out+='</ul>';flush();});
 return out;};})();
 async function api(u,b){const r=await fetch(u,b?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}:undefined);const j=await r.json();if(j.error)throw new Error(j.error);return j}
-async function loadList(){const ps=await api('/api/posts');$('list').innerHTML=ps.map(p=>\`<div class="pitem" data-n="\${p.name}"><b>\${p.title}\${p.draft?'<span class="badge">草稿</span>':''}</b><span>\${(p.pubDatetime||'').slice(0,10)} · \${p.name}</span></div>\`).join('');
+async function loadList(){const ps=await api('/api/posts');$('list').innerHTML=ps.map(p=>\`<div class="pitem" data-n="\${p.name}"><b>\${p.title}\${p.draft?'<span class="badge">草稿</span>':''}</b><span>\${(p.published||'').slice(0,10)} · \${p.name}</span></div>\`).join('');
 document.querySelectorAll('.pitem').forEach(el=>el.onclick=()=>openPost(el.dataset.n));if(ps.length&&!curName)openPost(ps[0].name);}
 async function openPost(name){const p=await api('/api/post?name='+encodeURIComponent(name));curName=name;isNew=false;
-$('title').value=p.title;$('name').value=p.name.replace(/\\.md$/,'');$('name').readOnly=true;$('tags').value=p.tags;$('desc').value=p.description;$('content').value=p.content;$('draft').checked=p.draft;$('featured').checked=p.featured;
+$('title').value=p.title;$('name').value=p.name.replace(/\\.md$/,'');$('name').readOnly=true;$('tags').value=p.tags;$('desc').value=p.description;$('content').value=p.content;$('draft').checked=p.draft;
 markActive();hidePreview();$('saved').textContent='';}
-function newPost(){curName=null;isNew=true;['title','name','tags','desc','content'].forEach(i=>$(i).value='');$('name').readOnly=false;$('draft').checked=true;$('featured').checked=false;hidePreview();markActive();$('title').focus();}
-function collect(){return{name:$('name').value,title:$('title').value,tags:$('tags').value,description:$('desc').value,featured:$('featured').checked,draft:$('draft').checked,content:$('content').value}}
+function newPost(){curName=null;isNew=true;['title','name','tags','desc','content'].forEach(i=>$(i).value='');$('name').readOnly=false;$('draft').checked=true;hidePreview();markActive();$('title').focus();}
+function collect(){return{name:$('name').value,title:$('title').value,tags:$('tags').value,description:$('desc').value,draft:$('draft').checked,content:$('content').value}}
 async function save(publish){const p=collect();if(!p.title.trim()){status('先起个标题');return}
 if(!p.name.trim()){p.name='post-'+new Date().toISOString().slice(0,10)}
 try{const r=await api('/api/save',p);curName=r.name;isNew=false;$('name').value=r.name.replace(/\\.md$/,'');$('name').readOnly=true;markActive();localStorage.removeItem('essay-draft');
@@ -349,7 +363,7 @@ function insertAtCursor(text){const t=$('content');const s=t.selectionStart??t.v
 $('imgBtn').onclick=()=>$('imgFile').click();
 $('imgFile').onchange=e=>{[...e.target.files].forEach(uploadFile);e.target.value=''};
 document.addEventListener('paste',e=>{const fs=[...(e.clipboardData?.files||[])].filter(f=>f.type.startsWith('image/'));if(fs.length){e.preventDefault();fs.forEach(uploadFile)}});
-(function restore(){const s=localStorage.getItem('essay-draft');if(!s)return;try{const p=JSON.parse(s);if(!p.title&&!p.content)return;['title','name','tags','desc','content'].forEach(i=>$(i).value=p[i]||'');$('draft').checked=p.draft!==false;$('featured').checked=!!p.featured;curName=p.curName||null;isNew=!!p.isNew;$('name').readOnly=!isNew;status('已恢复上次未保存的草稿（浏览器暂存）')}catch(e){}})();
+(function restore(){const s=localStorage.getItem('essay-draft');if(!s)return;try{const p=JSON.parse(s);if(!p.title&&!p.content)return;['title','name','tags','desc','content'].forEach(i=>$(i).value=p[i]||'');$('draft').checked=p.draft!==false;curName=p.curName||null;isNew=!!p.isNew;$('name').readOnly=!isNew;status('已恢复上次未保存的草稿（浏览器暂存）')}catch(e){}})();
 loadList();
 </script>
 </body>

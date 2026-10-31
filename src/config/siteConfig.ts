@@ -5,7 +5,7 @@ const SITE_LANG = "zh_CN"; // 语言代码，例如：'en', 'zh_CN', 'ja' 等。
 
 export const siteConfig: SiteConfig = {
 	title: "Blog",
-	subtitle: "理不尽的折腾记录",
+	subtitle: "理不尽",
 	siteURL: "https://2026534639-cyber.github.io/", // 请替换为你的站点URL，以斜杠结尾
 	siteStartDate: "2026-10-25", // 站点开始运行日期，用于站点统计组件计算运行天数
 	timeZone: "Asia/Shanghai", // 文章日期使用的 IANA 时区，可改为 Asia/Tokyo、Europe/Berlin 等
@@ -156,13 +156,11 @@ export const siteConfig: SiteConfig = {
 
 		homeText: {
 			enable: true,
-			title: "理不尽的折腾记录",
+			title: "理不尽",
 			switchable: true,
 
 			subtitle: [
-				"基建豪华，内容为零，这次先写字",
-				"写点工具，记点坑",
-				"深大学生的折腾日常",
+
 			],
 			typewriter: {
 				enable: true, // 启用副标题打字机效果

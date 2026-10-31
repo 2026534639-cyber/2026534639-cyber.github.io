@@ -154,10 +154,29 @@ ${String(p.markdown || "").replace(/\r\n/g, "\n").trimEnd()}
 				published: fm.published || "",
 			});
 		}
+		// 关于页也放进列表（排最前，isPage 标记方便前端识别）
+		if (await fileExists(path.join(root, "src", "content", "spec", "about.md"))) {
+			out.push({ slug: "about", title: "关于（页面）", draft: false, published: "9999-12-31", isPage: true });
+		}
 		return out.sort((a, b) => String(b.published).localeCompare(String(a.published)));
 	}
 
+	async function fileExists(p) {
+		try {
+			await fs.access(p);
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
 	async function getPost(slug) {
+		// 关于页：内容在 spec/about.md，且没有 frontmatter
+		if (slug === "about") {
+			const raw = await fs.readFile(path.join(root, "src", "content", "spec", "about.md"), "utf8");
+			const { fm, body } = parseFrontmatter(raw);
+			return { slug, fm, markdown: body.replace(/^\r?\n/, "") };
+		}
 		const raw = await fs.readFile(path.join(POSTS, `${slug}.md`), "utf8");
 		const { fm, body } = parseFrontmatter(raw);
 		return { slug, fm, markdown: body.replace(/^\r?\n/, "") };
@@ -165,6 +184,15 @@ ${String(p.markdown || "").replace(/\r\n/g, "\n").trimEnd()}
 
 	async function savePost({ slug, title, markdown }) {
 		if (!/^[a-z0-9][a-z0-9-]{0,60}$/.test(slug || "")) throw new Error("文章短名不合法");
+		if (slug === "about") {
+			// 关于页只写正文，不生成 frontmatter
+			await fs.writeFile(
+				path.join(root, "src", "content", "spec", "about.md"),
+				String(markdown || "").replace(/\r\n/g, "\n").trimStart() + "\n",
+				"utf8",
+			);
+			return { slug, title: "关于（页面）" };
+		}
 		const file = path.join(POSTS, `${slug}.md`);
 		let fm = {};
 		try {

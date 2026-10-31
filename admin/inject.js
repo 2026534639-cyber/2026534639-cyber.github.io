@@ -12,7 +12,10 @@
 		return data;
 	};
 
-	const slug = (location.pathname.match(/^\/posts\/([^/]+)\/$/) || [])[1] || "";
+	const postMatch = location.pathname.match(/^\/posts\/([^/]+)\/$/);
+	const isAbout = /^\/about\/?$/.test(location.pathname);
+	const slug = postMatch ? postMatch[1] : isAbout ? "about" : "";
+	const isPage = isAbout;
 	let dirty = false;
 
 	/* ---------- 样式 ---------- */
@@ -231,13 +234,17 @@
 
 	/* ---------- 文章编辑 ---------- */
 
-	const titleEl = document.querySelector('[data-pagefind-meta="title"]');
-	const contentEl = document.querySelector(".markdown-content");
-	const editable = Boolean(slug && titleEl && contentEl);
+	const titleEl = isPage ? null : document.querySelector('[data-pagefind-meta="title"]');
+	// 关于页的内容容器没有 .markdown-content 类，用带 data-pagefind-body 的 custom-md
+	const contentEl = isPage
+		? document.querySelector("div[data-pagefind-body].custom-md")
+		: document.querySelector(".markdown-content");
+	const editable = Boolean(slug && contentEl && (isPage || titleEl));
 
 	function enableEditing() {
 		if (!editable) return;
 		for (const node of [titleEl, contentEl]) {
+			if (!node) continue;
 			node.setAttribute("contenteditable", "true");
 			node.setAttribute("spellcheck", "false");
 			node.addEventListener("input", () => markDirty(true));
@@ -294,7 +301,11 @@
 		if (!editable) return false;
 		try {
 			const markdown = toMarkdown(contentEl);
-			await api("/__admin/save", { slug, title: titleEl.textContent.trim(), markdown });
+			await api("/__admin/save", {
+				slug,
+				title: titleEl ? titleEl.textContent.trim() : undefined,
+				markdown,
+			});
 			markDirty(false);
 			setStatus("已保存到本地");
 			return true;
@@ -383,7 +394,7 @@
 			jump.value = slug;
 			return;
 		}
-		location.href = `/posts/${jump.value}/`;
+		location.href = jump.value === "about" ? "/about/" : `/posts/${jump.value}/`;
 	});
 
 	api("/__admin/posts")
@@ -421,7 +432,8 @@
 				if (!ok) return;
 			}
 			setStatus("推送中…");
-			const r = await api("/__admin/publish", { message: editable ? `更新文章：${titleEl.textContent.trim()}` : "站点更新" });
+			const label = isPage ? "更新关于页" : editable ? `更新文章：${titleEl.textContent.trim()}` : "站点更新";
+			const r = await api("/__admin/publish", { message: label });
 			setStatus("");
 			toast(r.output, r.ok ? 4000 : 9000);
 		} else if (act === "settings") {

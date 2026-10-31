@@ -135,7 +135,6 @@ export const navBarConfig: NavBarConfig = {
 			name: "GitHub",
 			url: "https://github.com/2026534639-cyber",
 			external: true,
-			icon: "fa7-brands:github",
 		},
 	],
 };

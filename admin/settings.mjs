@@ -1,15 +1,15 @@
-// 读写站点配置：src/config.ts、src/constants/constants.ts
-// 只做「定位字段并替换值」，不改结构、不删注释，失败就抛错，绝不半途写坏文件。
+// 读写 Mizuki 的站点配置（src/config/*.ts 按文件拆分 + src/constants/constants.ts）
+// 只做「定位字段并替换值」，不改结构、不删注释，失败就抛错。
 import fs from "node:fs/promises";
 import path from "node:path";
 
 export function createSettings(root) {
-	const CONFIG = path.join(root, "src", "config.ts");
+	const CFG = (name) => path.join(root, "src", "config", name);
 	const CONSTANTS = path.join(root, "src", "constants", "constants.ts");
 
 	const q = (v) => JSON.stringify(String(v ?? ""));
 
-	/* ---------- 文本工具 ---------- */
+	/* ---------- 文本工具（与旧版相同） ---------- */
 
 	function skipString(text, i) {
 		const quote = text[i];
@@ -23,7 +23,6 @@ export function createSettings(root) {
 		return text.length - 1;
 	}
 
-	// 从 fromIndex 之后的第一个 { 开始，返回配对括号的位置
 	function braceRange(text, fromIndex) {
 		const open = text.indexOf("{", fromIndex);
 		if (open < 0) return null;
@@ -49,7 +48,6 @@ export function createSettings(root) {
 		return null;
 	}
 
-	// 一行里净增的大括号数量（忽略字符串和注释）
 	function braceDelta(line) {
 		let d = 0;
 		for (let i = 0; i < line.length; i++) {
@@ -74,8 +72,7 @@ export function createSettings(root) {
 		return range;
 	}
 
-	// 在 block 内（顶层，不在嵌套对象里）找到 `key:` 那一行
-	// seg 总是从 `{` 开始，所以第 0 行之后深度为 1，那一层才是字段所在层
+	// seg 总是从 `{` 开始，第 0 行之后深度 1 是字段层
 	function fieldIndex(lines, key) {
 		const re = new RegExp(`^\\s*${key}\\s*:`);
 		const base = braceDelta(lines[0]);
@@ -104,21 +101,17 @@ export function createSettings(root) {
 		return text.slice(0, range.start) + lines.join("\n") + text.slice(range.end + 1);
 	}
 
-	// keys 的最后一项是字段名，前面的是嵌套对象名
 	function setField(text, rootRe, keys, literal) {
 		const range = findBlock(text, rootRe);
 		if (keys.length === 1) return replaceFieldValue(text, range, keys[0], literal);
 		const seg = text.slice(range.start, range.end + 1);
-		const re = new RegExp(`\\b${keys[0]}\\s*:\\s*\\{`);
-		const m = re.exec(seg);
+		const m = new RegExp(`\\b${keys[0]}\\s*:\\s*\\{`).exec(seg);
 		if (!m) throw new Error(`找不到嵌套块：${keys[0]}`);
 		const inner = braceRange(text, range.start + m.index);
 		if (!inner) throw new Error(`嵌套块括号不匹配：${keys[0]}`);
 		if (keys.length === 2) return replaceFieldValue(text, inner, keys[1], literal);
 		throw new Error("配置嵌套过深");
 	}
-
-	/* ---------- 读取 ---------- */
 
 	function pick(text, rootRe, keys) {
 		let range = findBlock(text, rootRe);
@@ -143,7 +136,71 @@ export function createSettings(root) {
 		return v;
 	}
 
-	/* ---------- 导航栏 ---------- */
+	// 把多行字符串数组（如打字机文案）整体替换掉
+	function setStringArray(text, rootRe, keys, values) {
+		const range = findBlock(text, rootRe);
+		let cur = range;
+		for (const key of keys.slice(0, -1)) {
+			const seg = text.slice(cur.start, cur.end + 1);
+			const m = new RegExp(`\\b${key}\\s*:\\s*\\{`).exec(seg);
+			if (!m) throw new Error(`找不到嵌套块：${key}`);
+			cur = braceRange(text, cur.start + m.index);
+		}
+		const arrStart = text.indexOf("[", cur.start);
+		let depth = 0;
+		let arrEnd = -1;
+		for (let i = arrStart; i < text.length; i++) {
+			const c = text[i];
+			if (c === '"' || c === "'" || c === "`") {
+				i = skipString(text, i);
+				continue;
+			}
+			if (c === "[") depth++;
+			else if (c === "]") {
+				depth--;
+				if (depth === 0) {
+					arrEnd = i;
+					break;
+				}
+			}
+		}
+		if (arrStart < 0 || arrEnd < 0) throw new Error("找不到数组");
+		const body = values.map((v) => `\t\t\t\t${q(v)},`).join("\n");
+		return text.slice(0, arrStart) + `[\n${body}\n\t\t\t]` + text.slice(arrEnd + 1);
+	}
+
+	function getStringArray(text, rootRe, keys) {
+		const range = findBlock(text, rootRe);
+		let cur = range;
+		for (const key of keys.slice(0, -1)) {
+			const seg = text.slice(cur.start, cur.end + 1);
+			const m = new RegExp(`\\b${key}\\s*:\\s*\\{`).exec(seg);
+			if (!m) return [];
+			cur = braceRange(text, cur.start + m.index);
+		}
+		const arrStart = text.indexOf("[", cur.start);
+		let depth = 0;
+		let arrEnd = -1;
+		for (let i = arrStart; i < text.length; i++) {
+			const c = text[i];
+			if (c === '"' || c === "'" || c === "`") {
+				i = skipString(text, i);
+				continue;
+			}
+			if (c === "[") depth++;
+			else if (c === "]") {
+				depth--;
+				if (depth === 0) {
+					arrEnd = i;
+					break;
+				}
+			}
+		}
+		const body = text.slice(arrStart + 1, arrEnd);
+		return [...body.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((m) => JSON.parse(`"${m[1]}"`));
+	}
+
+	/* ---------- 导航栏（结构与 Fuwari 相同） ---------- */
 
 	function arrayRange(text, fromIndex) {
 		const open = text.indexOf("[", fromIndex);
@@ -201,7 +258,6 @@ export function createSettings(root) {
 			buf += ch;
 		}
 		entries.push(buf);
-
 		return entries
 			.map((e) => e.trim())
 			.filter(Boolean)
@@ -225,155 +281,199 @@ export function createSettings(root) {
 				return `\t\t{\n\t\t\tname: ${q(e.name)},\n\t\t\turl: ${q(e.url)},\n\t\t\texternal: ${!!e.external},\n\t\t},`;
 			})
 			.join("\n");
-		const next = `[\n${body}\n\t]`;
-		return text.slice(0, arr.start) + next + text.slice(arr.end + 1);
+		return text.slice(0, arr.start) + `[\n${body}\n\t]` + text.slice(arr.end + 1);
 	}
 
 	/* ---------- 对外 API ---------- */
 
 	async function read() {
-		const cfg = await fs.readFile(CONFIG, "utf8");
+		const site = await fs.readFile(CFG("siteConfig.ts"), "utf8");
+		const profile = await fs.readFile(CFG("profileConfig.ts"), "utf8");
+		const ann = await fs.readFile(CFG("announcementConfig.ts"), "utf8");
+		const music = await fs.readFile(CFG("musicConfig.ts"), "utf8");
+		const comment = await fs.readFile(CFG("commentConfig.ts"), "utf8");
+		const wallpaper = await fs.readFile(CFG("backgroundWallpaper.ts"), "utf8");
 		const cons = await fs.readFile(CONSTANTS, "utf8");
-		const site = /export const siteConfig/;
-		const profile = /export const profileConfig/;
+		const nav = await fs.readFile(CFG("navBarConfig.ts"), "utf8");
 		const num = (name) => {
 			const m = cons.match(new RegExp(`export const ${name}\\s*=\\s*([-\\d.]+)`));
 			return m ? Number(m[1]) : undefined;
 		};
-		const bsrc = pick(cfg, site, ["banner", "src"]) || "";
-		const avatar = pick(cfg, profile, ["avatar"]) || "";
 		return {
 			site: {
-				title: pick(cfg, site, ["title"]),
-				subtitle: pick(cfg, site, ["subtitle"]),
+				title: pick(site, /export const siteConfig/, ["title"]),
+				subtitle: pick(site, /export const siteConfig/, ["subtitle"]),
+			},
+			hero: {
+				title: pick(site, /export const siteConfig/, ["homeText", "title"]),
+				subtitles: getStringArray(site, /export const siteConfig/, ["homeText", "subtitle"]),
 			},
 			theme: {
-				hue: pick(cfg, site, ["themeColor", "hue"]),
-				fixed: pick(cfg, site, ["themeColor", "fixed"]),
-			},
-			banner: {
-				enable: pick(cfg, site, ["banner", "enable"]),
-				file: bsrc.split("/").pop() || "",
-			},
-			toc: {
-				enable: pick(cfg, site, ["toc", "enable"]),
-				depth: pick(cfg, site, ["toc", "depth"]),
+				hue: pick(site, /export const siteConfig/, ["themeColor", "hue"]),
+				fixed: pick(site, /export const siteConfig/, ["themeColor", "fixed"]),
 			},
 			profile: {
-				name: pick(cfg, profile, ["name"]),
-				bio: pick(cfg, profile, ["bio"]),
-				avatar: avatar.split("/").pop() || "",
+				name: pick(profile, /export const profileConfig/, ["name"]),
+				bio: pick(profile, /export const profileConfig/, ["bio"]),
+				avatar: (pick(profile, /export const profileConfig/, ["avatar"]) || "").split("/").pop(),
 			},
+			font: {
+				mode: pick(site, /export const siteConfig/, ["font", "mode"]),
+			},
+			announcement: {
+				content: pick(ann, /export const announcementConfig/, ["content"]),
+				linkText: pick(ann, /export const announcementConfig/, ["link", "text"]),
+				linkUrl: pick(ann, /export const announcementConfig/, ["link", "url"]),
+			},
+			music: { enable: pick(music, /export const musicPlayerConfig/, ["enable"]) },
+			comment: { enable: pick(comment, /export const commentConfig/, ["enable"]) },
 			layout: {
 				pageSize: num("PAGE_SIZE"),
-				bannerHeight: num("BANNER_HEIGHT"),
-				bannerExtend: num("BANNER_HEIGHT_EXTEND"),
 				pageWidth: num("PAGE_WIDTH"),
 			},
-			nav: readNav(cfg),
+			nav: readNav(nav),
 		};
 	}
 
-	async function write(patch) {
-		const cfgRaw = await fs.readFile(CONFIG, "utf8");
-		const consRaw = await fs.readFile(CONSTANTS, "utf8");
-		const cfgCRLF = /\r\n/.test(cfgRaw);
-		const consCRLF = /\r\n/.test(consRaw);
-		let cfg = cfgRaw;
-		let cons = consRaw;
-		const site = /export const siteConfig/;
-		const profile = /export const profileConfig/;
+	async function write(p) {
+		const files = {
+			site: await fs.readFile(CFG("siteConfig.ts"), "utf8"),
+			profile: await fs.readFile(CFG("profileConfig.ts"), "utf8"),
+			ann: await fs.readFile(CFG("announcementConfig.ts"), "utf8"),
+			music: await fs.readFile(CFG("musicConfig.ts"), "utf8"),
+			comment: await fs.readFile(CFG("commentConfig.ts"), "utf8"),
+			nav: await fs.readFile(CFG("navBarConfig.ts"), "utf8"),
+			cons: await fs.readFile(CONSTANTS, "utf8"),
+		};
+		const crlf = {};
+		for (const [k, v] of Object.entries(files)) crlf[k] = /\r\n/.test(v);
+		const siteRe = /export const siteConfig/;
+		const profileRe = /export const profileConfig/;
+		const annRe = /export const announcementConfig/;
 		const changed = [];
 
-		if (patch.site) {
-			if (typeof patch.site.title === "string") {
-				cfg = setField(cfg, site, ["title"], q(patch.site.title));
+		if (p.site) {
+			if (typeof p.site.title === "string") {
+				files.site = setField(files.site, siteRe, ["title"], q(p.site.title));
 				changed.push("site.title");
 			}
-			if (typeof patch.site.subtitle === "string") {
-				cfg = setField(cfg, site, ["subtitle"], q(patch.site.subtitle));
+			if (typeof p.site.subtitle === "string") {
+				files.site = setField(files.site, siteRe, ["subtitle"], q(p.site.subtitle));
 				changed.push("site.subtitle");
 			}
 		}
-		if (patch.theme) {
-			if (Number.isFinite(patch.theme.hue)) {
-				const h = Math.max(0, Math.min(360, Math.round(patch.theme.hue)));
-				cfg = setField(cfg, site, ["themeColor", "hue"], String(h));
+		if (p.hero) {
+			if (typeof p.hero.title === "string") {
+				files.site = setField(files.site, siteRe, ["homeText", "title"], q(p.hero.title));
+				changed.push("hero.title");
+			}
+			if (Array.isArray(p.hero.subtitles)) {
+				files.site = setStringArray(files.site, siteRe, ["homeText", "subtitle"], p.hero.subtitles.filter((s) => String(s).trim()));
+				changed.push("hero.subtitles");
+			}
+		}
+		if (p.theme) {
+			if (Number.isFinite(p.theme.hue)) {
+				files.site = setField(files.site, siteRe, ["themeColor", "hue"], String(Math.max(0, Math.min(360, Math.round(p.theme.hue)))));
 				changed.push("theme.hue");
 			}
-			if (typeof patch.theme.fixed === "boolean") {
-				cfg = setField(cfg, site, ["themeColor", "fixed"], String(patch.theme.fixed));
+			if (typeof p.theme.fixed === "boolean") {
+				files.site = setField(files.site, siteRe, ["themeColor", "fixed"], String(p.theme.fixed));
 				changed.push("theme.fixed");
 			}
 		}
-		if (patch.banner && typeof patch.banner.enable === "boolean") {
-			cfg = setField(cfg, site, ["banner", "enable"], String(patch.banner.enable));
-			changed.push("banner.enable");
-		}
-		if (patch.toc) {
-			if (typeof patch.toc.enable === "boolean") {
-				cfg = setField(cfg, site, ["toc", "enable"], String(patch.toc.enable));
-				changed.push("toc.enable");
-			}
-			if (Number.isFinite(patch.toc.depth)) {
-				const d = Math.max(1, Math.min(3, Math.round(patch.toc.depth)));
-				cfg = setField(cfg, site, ["toc", "depth"], String(d));
-				changed.push("toc.depth");
-			}
-		}
-		if (patch.profile) {
-			if (typeof patch.profile.name === "string") {
-				cfg = setField(cfg, profile, ["name"], q(patch.profile.name));
+		if (p.profile) {
+			if (typeof p.profile.name === "string") {
+				files.profile = setField(files.profile, profileRe, ["name"], q(p.profile.name));
 				changed.push("profile.name");
 			}
-			if (typeof patch.profile.bio === "string") {
-				cfg = setField(cfg, profile, ["bio"], q(patch.profile.bio));
+			if (typeof p.profile.bio === "string") {
+				files.profile = setField(files.profile, profileRe, ["bio"], q(p.profile.bio));
 				changed.push("profile.bio");
 			}
 		}
-		if (patch.layout) {
-			const nums = {
-				PAGE_SIZE: patch.layout.pageSize,
-				BANNER_HEIGHT: patch.layout.bannerHeight,
-				BANNER_HEIGHT_EXTEND: patch.layout.bannerExtend,
-				PAGE_WIDTH: patch.layout.pageWidth,
-			};
+		if (p.font && (p.font.mode === "custom" || p.font.mode === "system")) {
+			files.site = setField(files.site, siteRe, ["font", "mode"], q(p.font.mode));
+			changed.push("font.mode");
+		}
+		if (p.announcement) {
+			if (typeof p.announcement.content === "string") {
+				files.ann = setField(files.ann, annRe, ["content"], q(p.announcement.content));
+				changed.push("announcement.content");
+			}
+			if (typeof p.announcement.linkText === "string") {
+				files.ann = setField(files.ann, annRe, ["link", "text"], q(p.announcement.linkText));
+				changed.push("announcement.linkText");
+			}
+			if (typeof p.announcement.linkUrl === "string") {
+				files.ann = setField(files.ann, annRe, ["link", "url"], q(p.announcement.linkUrl));
+				changed.push("announcement.linkUrl");
+			}
+		}
+		if (p.music && typeof p.music.enable === "boolean") {
+			files.music = setField(files.music, /export const musicPlayerConfig/, ["enable"], String(p.music.enable));
+			changed.push("music.enable");
+		}
+		if (p.comment && typeof p.comment.enable === "boolean") {
+			files.comment = setField(files.comment, /export const commentConfig/, ["enable"], String(p.comment.enable));
+			changed.push("comment.enable");
+		}
+		if (p.layout) {
+			const nums = { PAGE_SIZE: p.layout.pageSize, PAGE_WIDTH: p.layout.pageWidth };
 			for (const [name, val] of Object.entries(nums)) {
 				if (!Number.isFinite(val)) continue;
 				const re = new RegExp(`(export const ${name}\\s*=\\s*)([-\\d.]+)`);
-				if (!re.test(cons)) continue;
-				cons = cons.replace(re, `$1${Math.round(val)}`);
+				if (!re.test(files.cons)) continue;
+				files.cons = files.cons.replace(re, `$1${Math.round(val)}`);
 				changed.push(`layout.${name}`);
 			}
 		}
-		if (Array.isArray(patch.nav)) {
-			cfg = writeNav(cfg, patch.nav);
+		if (Array.isArray(p.nav)) {
+			files.nav = writeNav(files.nav, p.nav);
 			changed.push("nav");
 		}
 
-		if (changed.some((c) => c.startsWith("layout."))) {
-			const out = consCRLF ? cons.replace(/\r?\n/g, "\r\n") : cons;
-			await fs.writeFile(CONSTANTS, out, "utf8");
-		}
-		if (changed.some((c) => !c.startsWith("layout."))) {
-			const out = cfgCRLF ? cfg.replace(/\r?\n/g, "\r\n") : cfg;
-			await fs.writeFile(CONFIG, out, "utf8");
+		const targets = [
+			[CFG("siteConfig.ts"), files.site],
+			[CFG("profileConfig.ts"), files.profile],
+			[CFG("announcementConfig.ts"), files.ann],
+			[CFG("musicConfig.ts"), files.music],
+			[CFG("commentConfig.ts"), files.comment],
+			[CFG("navBarConfig.ts"), files.nav],
+			[CONSTANTS, files.cons],
+		];
+		for (const [file, content] of targets) {
+			const key = Object.keys(files).find((k) => files[k] === content);
+			const out = key && crlf[key] ? content.replace(/\r?\n/g, "\r\n") : content;
+			await fs.writeFile(file, out, "utf8");
 		}
 		return changed;
 	}
 
-	// 换横幅 / 头像：只覆盖图片文件，并把配置里的扩展名对齐
+	// 换头像 / 全屏壁纸
 	async function setAsset(kind, filename) {
-		let cfg = await fs.readFile(CONFIG, "utf8");
-		if (kind === "banner") {
-			cfg = setField(cfg, /export const siteConfig/, ["banner", "src"], q(`assets/images/${filename}`));
-		} else if (kind === "avatar") {
-			cfg = setField(cfg, /export const profileConfig/, ["avatar"], q(`assets/images/${filename}`));
-		} else {
-			throw new Error("未知图片类型");
+		if (kind === "avatar") {
+			const f = CFG("profileConfig.ts");
+			let t = await fs.readFile(f, "utf8");
+			t = setField(t, /export const profileConfig/, ["avatar"], q(`assets/images/${filename}`));
+			await fs.writeFile(f, t, "utf8");
+			return filename;
 		}
-		await fs.writeFile(CONFIG, cfg, "utf8");
-		return filename;
+		if (kind === "banner") {
+			// 全屏壁纸 + 顶部横幅都指到新图
+			const wp = CFG("backgroundWallpaper.ts");
+			let w = await fs.readFile(wp, "utf8");
+			w = w.replace(/\/assets\/desktop-banner\/[^"]+/g, `/assets/desktop-banner/${filename}`);
+			w = w.replace(/\/assets\/mobile-banner\/[^"]+/g, `/assets/desktop-banner/${filename}`);
+			await fs.writeFile(wp, w, "utf8");
+			const f = CFG("siteConfig.ts");
+			let t = await fs.readFile(f, "utf8");
+			t = t.replace(/\/assets\/desktop-banner\/[^"]+/g, `/assets/desktop-banner/${filename}`);
+			t = t.replace(/\/assets\/mobile-banner\/[^"]+/g, `/assets/desktop-banner/${filename}`);
+			await fs.writeFile(f, t, "utf8");
+			return filename;
+		}
+		throw new Error("未知图片类型");
 	}
 
 	return { read, write, setAsset };

@@ -120,6 +120,8 @@ published: ${p.published}
 description: ${q(p.description)}
 tags: [${tags.map(q).join(", ")}]
 category: ${q(p.category || tags[0])}
+author: ${q(p.author || "理不尽")}
+licenseName: "Unlicensed"
 draft: ${!!p.draft}
 ---
 
@@ -176,6 +178,7 @@ ${String(p.markdown || "").replace(/\r\n/g, "\n").trimEnd()}
 			description: fm.description || "",
 			tags: fm.tags || ["随笔"],
 			category: fm.category || (fm.tags || ["随笔"])[0],
+			author: fm.author || "理不尽",
 			draft: fm.draft ?? false,
 			markdown,
 		};
@@ -396,24 +399,46 @@ ${String(p.markdown || "").replace(/\r\n/g, "\n").trimEnd()}
 
 			if (url.pathname === "/__admin/asset" && req.method === "POST") {
 				const { kind, name, data } = await readBody(req);
-				if (!["banner", "avatar"].includes(kind)) throw new Error("未知图片类型");
-				const ext = path.extname(String(name || "")).toLowerCase();
-				if (![".png", ".jpg", ".jpeg", ".webp"].includes(ext)) throw new Error("只支持 png/jpg/webp");
+				const ext = path.extname(String(name || "")).toLowerCase() || ".png";
 				const buf = Buffer.from(String(data || ""), "base64");
 				if (!buf.length || buf.length > 12e6) throw new Error("图片为空或超过 12MB");
-				const dir = path.join(root, "src", "assets", "images");
-				await fs.mkdir(dir, { recursive: true });
 				// 文件名带内容哈希：同尺寸换图也能换 URL，绕开 astro 图片缓存
 				const hash = createHash("md5").update(buf).digest("hex").slice(0, 8);
-				const filename = `${kind}-${hash}${ext}`;
-				const prev = await settings.read();
-				const oldFile = kind === "banner" ? prev.banner.file : prev.profile.avatar;
-				await fs.writeFile(path.join(dir, filename), buf);
-				await settings.setAsset(kind, filename);
-				if (oldFile && oldFile !== filename) {
-					await fs.rm(path.join(dir, oldFile), { force: true });
+
+				if (kind === "avatar") {
+					if (![".png", ".jpg", ".jpeg", ".webp"].includes(ext)) throw new Error("只支持 png/jpg/webp");
+					const filename = `avatar-${hash}${ext}`;
+					const dir = path.join(root, "src", "assets", "images");
+					await fs.mkdir(dir, { recursive: true });
+					await fs.writeFile(path.join(dir, filename), buf);
+					await settings.setAsset("avatar", filename);
+					return json(200, { ok: true, file: filename });
 				}
-				return json(200, { ok: true, file: filename });
+
+				if (kind === "avatar-icon") {
+					// 浏览器 canvas 生成的圆形小图，顶栏图标用
+					const filename = `home-${hash}.png`;
+					const dir = path.join(root, "public", "assets", "home");
+					await fs.mkdir(dir, { recursive: true });
+					await fs.writeFile(path.join(dir, filename), buf);
+					const f = path.join(root, "src", "config", "siteConfig.ts");
+					let t = await fs.readFile(f, "utf8");
+					t = t.replace(/(icon:\s*")assets\/home\/[^"]+(")/, `$1assets/home/${filename}$2`);
+					await fs.writeFile(f, t, "utf8");
+					return json(200, { ok: true, file: filename });
+				}
+
+				if (kind === "banner") {
+					if (![".png", ".jpg", ".jpeg", ".webp"].includes(ext)) throw new Error("只支持 png/jpg/webp");
+					const filename = `banner-${hash}${ext}`;
+					const dir = path.join(root, "public", "assets", "desktop-banner");
+					await fs.mkdir(dir, { recursive: true });
+					await fs.writeFile(path.join(dir, filename), buf);
+					await settings.setAsset("banner", filename);
+					return json(200, { ok: true, file: filename });
+				}
+
+				throw new Error("未知图片类型");
 			}
 
 			if (url.pathname === "/__admin/pages") {

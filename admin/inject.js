@@ -458,20 +458,32 @@
 			<header><span>站点设置</span><button class="btn sm" data-close>关闭</button></header>
 			<div class="body">
 				<h4>外观</h4>
-				<div class="row"><label>标题</label><input type="text" id="s-title"></div>
+				<div class="row"><label>站点标题</label><input type="text" id="s-title"></div>
 				<div class="row"><label>副标题</label><input type="text" id="s-subtitle"></div>
+				<div class="row"><label>首页大字</label><input type="text" id="s-hero-title"></div>
+				<div class="row"><label>名字</label><input type="text" id="s-name"></div>
 				<div class="row"><label>简介</label><input type="text" id="s-bio"></div>
 				<div class="row"><label>主题色</label><input type="range" id="s-hue" min="0" max="360" step="1"><span id="s-hue-val" class="muted"></span></div>
-				<div class="row"><label>横幅</label><input type="file" id="s-banner" accept="image/*"></div>
+				<div class="row"><label>字体</label><select id="s-font"><option value="custom">圆体（默认）</option><option value="system">系统字体</option></select></div>
 				<div class="row"><label>头像</label><input type="file" id="s-avatar" accept="image/*"></div>
-				<div class="muted">图片建议：横幅 1920×700，头像正方形 ≥512。</div>
+				<div class="row"><label>壁纸</label><input type="file" id="s-banner" accept="image/*"></div>
+				<div class="muted">壁纸建议 1920×1080 以上；头像正方形效果最好。</div>
+
+				<h4>首页打字机文案（一行一句）</h4>
+				<textarea id="s-hero-sub" rows="4" style="width:100%;padding:8px;border-radius:8px;border:1px solid rgba(127,127,127,.32);background:transparent;color:inherit;font:inherit;resize:vertical"></textarea>
+
+				<h4>公告</h4>
+				<div class="row"><label>内容</label><input type="text" id="s-ann-content"></div>
+				<div class="row"><label>链接文字</label><input type="text" id="s-ann-text"></div>
+				<div class="row"><label>链接地址</label><input type="text" id="s-ann-url"></div>
 
 				<h4>排版</h4>
 				<div class="row"><label>每页篇数</label><input type="number" id="s-page-size" min="1" max="50"></div>
-				<div class="row"><label>横幅高度</label><input type="number" id="s-banner-h" min="0" max="80" step="1"><span class="muted">vh</span></div>
-				<div class="row"><label>首页延伸</label><input type="number" id="s-banner-ext" min="0" max="80" step="1"><span class="muted">vh</span></div>
 				<div class="row"><label>页宽</label><input type="number" id="s-page-width" min="50" max="120" step="1"><span class="muted">rem</span></div>
-				<div class="row"><label>目录</label><input type="number" id="s-toc-depth" min="1" max="3" step="1"><span class="muted">级</span></div>
+
+				<h4>功能开关</h4>
+				<div class="row"><label>音乐播放器</label><input type="checkbox" id="s-music"><span class="muted">需在 musicConfig 配自己的歌单</span></div>
+				<div class="row"><label>评论</label><input type="checkbox" id="s-comment"><span class="muted">giscus/twikoo，还需填对应配置</span></div>
 
 				<h4>导航栏</h4>
 				<div id="s-nav"></div>
@@ -488,14 +500,20 @@
 
 		drawer.querySelector("#s-title").value = s.site.title || "";
 		drawer.querySelector("#s-subtitle").value = s.site.subtitle || "";
+		drawer.querySelector("#s-hero-title").value = s.hero.title || "";
+		drawer.querySelector("#s-hero-sub").value = (s.hero.subtitles || []).join("\n");
+		drawer.querySelector("#s-name").value = s.profile.name || "";
 		drawer.querySelector("#s-bio").value = s.profile.bio || "";
 		drawer.querySelector("#s-hue").value = s.theme.hue ?? 250;
 		drawer.querySelector("#s-hue-val").textContent = String(s.theme.hue ?? 250);
+		drawer.querySelector("#s-font").value = s.font.mode === "system" ? "system" : "custom";
+		drawer.querySelector("#s-ann-content").value = s.announcement.content || "";
+		drawer.querySelector("#s-ann-text").value = s.announcement.linkText || "";
+		drawer.querySelector("#s-ann-url").value = s.announcement.linkUrl || "";
 		drawer.querySelector("#s-page-size").value = s.layout.pageSize;
-		drawer.querySelector("#s-banner-h").value = s.layout.bannerHeight;
-		drawer.querySelector("#s-banner-ext").value = s.layout.bannerExtend;
 		drawer.querySelector("#s-page-width").value = s.layout.pageWidth;
-		drawer.querySelector("#s-toc-depth").value = s.toc.depth;
+		drawer.querySelector("#s-music").checked = !!s.music.enable;
+		drawer.querySelector("#s-comment").checked = !!s.comment.enable;
 
 		const hue = drawer.querySelector("#s-hue");
 		hue.addEventListener("input", () => {
@@ -535,13 +553,25 @@
 		drawer.querySelector("#s-save").addEventListener("click", async () => {
 			const patch = {
 				site: { title: drawer.querySelector("#s-title").value, subtitle: drawer.querySelector("#s-subtitle").value },
-				profile: { bio: drawer.querySelector("#s-bio").value },
+				hero: {
+					title: drawer.querySelector("#s-hero-title").value,
+					subtitles: drawer.querySelector("#s-hero-sub").value.split("\n").map((x) => x.trim()).filter(Boolean),
+				},
+				profile: {
+					name: drawer.querySelector("#s-name").value,
+					bio: drawer.querySelector("#s-bio").value,
+				},
 				theme: { hue: Number(drawer.querySelector("#s-hue").value) },
-				toc: { depth: Number(drawer.querySelector("#s-toc-depth").value) },
+				font: { mode: drawer.querySelector("#s-font").value },
+				announcement: {
+					content: drawer.querySelector("#s-ann-content").value,
+					linkText: drawer.querySelector("#s-ann-text").value,
+					linkUrl: drawer.querySelector("#s-ann-url").value,
+				},
+				music: { enable: drawer.querySelector("#s-music").checked },
+				comment: { enable: drawer.querySelector("#s-comment").checked },
 				layout: {
 					pageSize: Number(drawer.querySelector("#s-page-size").value),
-					bannerHeight: Number(drawer.querySelector("#s-banner-h").value),
-					bannerExtend: Number(drawer.querySelector("#s-banner-ext").value),
 					pageWidth: Number(drawer.querySelector("#s-page-width").value),
 				},
 				nav: navState,
@@ -620,18 +650,51 @@
 		}
 	}
 
-	async function uploadAsset(kind, file) {
-		if (!file) return;
-		setStatus("上传中…");
-		const b64 = await new Promise((resolve, reject) => {
+	function fileToB64(file) {
+		return new Promise((resolve, reject) => {
 			const fr = new FileReader();
 			fr.onload = () => resolve(String(fr.result).split(",")[1]);
 			fr.onerror = reject;
 			fr.readAsDataURL(file);
 		});
+	}
+
+	// 头像 → 圆形小图标（顶栏用），浏览器 canvas 生成，服务端不用装图像库
+	async function makeCircleIcon(file) {
+		const url = URL.createObjectURL(file);
+		try {
+			const img = await new Promise((resolve, reject) => {
+				const i = new Image();
+				i.onload = () => resolve(i);
+				i.onerror = reject;
+				i.src = url;
+			});
+			const side = Math.min(img.width, img.height);
+			const canvas = document.createElement("canvas");
+			canvas.width = canvas.height = 256;
+			const ctx = canvas.getContext("2d");
+			ctx.imageSmoothingQuality = "high";
+			ctx.beginPath();
+			ctx.arc(128, 128, 128, 0, Math.PI * 2);
+			ctx.clip();
+			ctx.drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, 256, 256);
+			return canvas.toDataURL("image/png").split(",")[1];
+		} finally {
+			URL.revokeObjectURL(url);
+		}
+	}
+
+	async function uploadAsset(kind, file) {
+		if (!file) return;
+		setStatus("上传图片…");
+		const b64 = await fileToB64(file);
 		await api("/__admin/asset", { kind, name: file.name, data: b64 });
+		if (kind === "avatar") {
+			const iconB64 = await makeCircleIcon(file);
+			await api("/__admin/asset", { kind: "avatar-icon", name: "icon.png", data: iconB64 });
+		}
 		setStatus("");
-		toast(`${kind === "banner" ? "横幅" : "头像"}已替换，保存设置后生效`);
+		toast(kind === "banner" ? "壁纸已替换" : "头像已替换", 3000);
 	}
 
 	/* ---------- 启动 ---------- */

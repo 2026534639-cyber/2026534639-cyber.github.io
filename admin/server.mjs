@@ -49,9 +49,13 @@ export function startServer(root) {
 			return;
 		}
 		console.log(`[admin] 启动 astro dev (:${DEV_PORT})…`);
+		// astro 7 的 CLI 在 bin/astro.mjs，老版本是 astro.js
+		const astroCli = (await fileExists(path.join(root, "node_modules", "astro", "bin", "astro.mjs")))
+			? "node_modules/astro/bin/astro.mjs"
+			: "node_modules/astro/astro.js";
 		devChild = spawn(
 			process.execPath,
-			["node_modules/astro/astro.js", "dev", "--port", String(DEV_PORT), "--host", "127.0.0.1"],
+			[astroCli, "dev", "--port", String(DEV_PORT), "--host", "127.0.0.1"],
 			{ cwd: root, stdio: ["ignore", "pipe", "pipe"], windowsHide: true },
 		);
 		const pipe = (buf) => {
@@ -284,8 +288,12 @@ ${String(p.markdown || "").replace(/\r\n/g, "\n").trimEnd()}
 				res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
 				res.end(
 					'<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="2">' +
-						'<title>启动中…</title><body style="font:14px/1.8 system-ui,-apple-system,\'Microsoft YaHei\';padding:48px;color:#888">' +
-						"预览服务正在启动，两秒后自动刷新……</body>",
+						'<title>启动中…</title><body style="font:15px/1.9 system-ui,-apple-system,\'Microsoft YaHei\';padding:56px;color:#666;background:#f7f8fa">' +
+						'<div style="max-width:520px;margin:0 auto">' +
+						'<div style="font-size:20px;font-weight:600;color:#222;margin-bottom:10px">博客后台正在启动</div>' +
+						'<div>首次启动要 10–20 秒（在起本地预览服务）。<b>本页每 2 秒自动刷新</b>，起来了就直接进编辑界面。</div>' +
+						'<div style="margin-top:18px;color:#999;font-size:13px">如果一直停在这页：关掉黑色命令行窗口重新双击「博客后台」。</div>' +
+						"</div></body>",
 				);
 				return;
 			}
@@ -500,9 +508,18 @@ ${String(p.markdown || "").replace(/\r\n/g, "\n").trimEnd()}
 
 	return {
 		async listen() {
-			await ensureDev();
-			await new Promise((resolve) => server.listen(ADMIN_PORT, "127.0.0.1", resolve));
-			return `http://localhost:${ADMIN_PORT}`;
+			// 先监听端口，再在后台起 astro dev：
+			// 否则浏览器打开时会 connection refused（dev 首次启动要十几秒）
+			const state = await new Promise((resolve, reject) => {
+				server.once("error", (e) => {
+					if (e.code === "EADDRINUSE") resolve("inuse");
+					else reject(e);
+				});
+				server.listen(ADMIN_PORT, "127.0.0.1", () => resolve("ok"));
+			});
+			if (state === "inuse") return null;
+			ensureDev().catch((e) => console.log("[admin] astro dev 启动失败：", e.message));
+			return `http://127.0.0.1:${ADMIN_PORT}`;
 		},
 		close() {
 			server.close();
